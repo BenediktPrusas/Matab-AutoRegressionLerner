@@ -65,7 +65,8 @@ classdef LR < AutoRegressionModel
                     struct2cell(obj.TrainOptions)]',1,[]);
                 
                 %Train Model
-                obj.LRmodel= fitrlinear(tbl,formula,nvPairs{:});
+                obj.LRmodel= fitlm(tbl,formula,nvPairs{:});
+                
             end
             obj.UserData=obj.LRmodel;
         end
