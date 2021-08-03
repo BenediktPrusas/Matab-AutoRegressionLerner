@@ -164,7 +164,7 @@ classdef AutoRegressor
             for j=1:size(charArr,3)
                 if (isequal(charArr(1,1:5,j),'Next_'))
                     charArr(1,1:5,j)=' ';
-                    feature_name=strtrim(string(charArr(1,:,j)));
+                    feature_name(j)=strtrim(string(charArr(1,:,j)));
                 end
             end
             for i=1:length(feature_name)
