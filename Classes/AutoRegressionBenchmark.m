@@ -8,24 +8,27 @@ classdef AutoRegressionBenchmark
     
     properties (SetAccess='public')
         BenchmarkSettings struct %A Struct altering properties such as skipping timesteps
-        Algorithms cell %CellArrays of Algorithms which inherit from Forecasting AlgorithmInterfache
         Data table %Table containing all Features and Targets and a DateTime Variable named Date
         ErrorLog table %A Tabel Containing all Results of the last benchmark run
+        Ensamble AutoRegressor
     end
-    properties (SetAccess='private',SetObservable=false)
-        All_targets string
-        All_features string
+    
+     properties (SetAccess='private')
+        delayedInput double%for using previous timesteps as input %currently not supportet
     end
     
     methods (Hidden=0, Access='public')
-        function obj = AutoRegressionBenchmark(Data,Algorithm,BenchmarkSettings)
+        function obj = AutoRegressionBenchmark(Data,AutoRegressor,BenchmarkSettings)
             %AutoRegressionBenchmark Benchmark Autoregressive Algorithms
             %   Detailed explanation goes here
             
             obj.BenchmarkSettings=BenchmarkSettings;
             obj.Data=Data;
+            obj.Ensamble=AutoRegressor;
             obj=obj.verifyDataset(); %Checks for errors in the Dataset
-            obj=obj.addAlgorithm(Algorithm);
+            
+            %for using previous timesteps as input %currently not supportet
+            obj.delayedInput=0;
             
         end
         function obj = benchmark(obj)
@@ -35,8 +38,6 @@ classdef AutoRegressionBenchmark
             
             %Verifiy Dataset
             obj.verifyDataset();
-            %Update Prediction Order
-            PredictionOrder=obj.determinePredictionOrder();
             
             % Determine which timesteps to test
             timesteps_to_test=[];
@@ -44,7 +45,7 @@ classdef AutoRegressionBenchmark
             
             for seq=1:size(IndicesOfUniterrupedSequences,1)
                 
-                start_of_seq=IndicesOfUniterrupedSequences(seq,1)+obj.BenchmarkSettings.InitialTrainingSamples;
+                start_of_seq=IndicesOfUniterrupedSequences(seq,1)+max(obj.BenchmarkSettings.InitialTrainingSamples,obj.delayedInput);
                 end_of_seq=(IndicesOfUniterrupedSequences(seq,2)-obj.BenchmarkSettings.ClosedLoopTimeHorizion)+1;
                 stepsize=obj.BenchmarkSettings.Timesteps_skipped+1;
                 
@@ -68,32 +69,13 @@ classdef AutoRegressionBenchmark
                 [input_tbl, ground_truth]=obj.prepareTableForPrediction(t);
                 
                 % Train all Models
-                for  a=1:length(obj.Algorithms)
-                    obj.Algorithms{a}.train(obj.Data(1:t-1,:));
-                end
+                obj.Ensamble=obj.Ensamble.train(obj.Data(1:t-1,:));
                 
                 %Make Predictions
-                for j=1:obj.BenchmarkSettings.ClosedLoopTimeHorizion
-                    for a=PredictionOrder
-                        %Predict
-                        input_tbl(j,:)=obj.Algorithms{a}.predict(input_tbl(j,:));
-                        predictions=input_tbl(:,obj.All_targets);
-                    end
-                    %fill out the features of the next timestep
-                    if j<height(input_tbl)
-                        charArr=char(obj.All_targets);
-                        for j=1:size(charArr,3)
-                            if (isequal(charArr(1,1:5,j),'Next_'))
-                                charArr(1,1:5,j)=' ';
-                                feature_name=strtrim(string(charArr(1,:,j)));
-                                input_tbl(j+1,feature_name)=input_tbl(j,strtrim(charArr(1,:,j)));
-                            end
-                        end
-                    end
-                    
-                end
+                output_tbl=obj.Ensamble.predict(input_tbl);
+                predictions=output_tbl(end-(size(ground_truth,1)-1):end,obj.trimNext_(obj.Ensamble.All_targets));
                 %Store Errors and Performance Metrics
-                UserData=cellfun(@(x)x.UserData,obj.Algorithms,'UniformOutput',false);
+                UserData=cellfun(@(x)x.UserData,obj.Ensamble.Models,'UniformOutput',false);
                 
                 new_row=obj.testLog(t,predictions, ground_truth,UserData);
                 
@@ -147,34 +129,6 @@ classdef AutoRegressionBenchmark
                 
             end
         end
-        function obj = addAlgorithm(obj,UserIn)
-            %addAlgorithm Adds an Algoritm or cell Array of Algorithms to
-            %the benchmark object
-            s=superclasses(UserIn);
-            if ~isempty(s) && s{1}=="ForecastingAlgorithmInterface"
-                obj.Algorithms{end+1}=UserIn;
-                obj.All_targets(end+1)=UserIn.Targets;
-                obj.All_features=union(obj.All_features,UserIn.Features);
-                obj.determinePredictionOrder;
-            else
-                %case when a cell array of algorithms is delivered
-                if class(UserIn)=='cell'
-                    if length(size(UserIn))==2 && (sum(size(UserIn)==1)>0)
-                        for i=1:length(UserIn)
-                            s=superclasses(UserIn{i});
-                            if ~isempty(s) &&s{1}=="ForecastingAlgorithmInterface"
-                                obj.Algorithms{end+1}=UserIn{i};
-                                obj.All_targets(end+1)=UserIn{i}.Targets;
-                                obj.All_features=union(obj.All_features,UserIn{i}.Features);
-                            else
-                                error("Algorithm object must have ForecastingAlgorithmInterface as superclass")
-                            end
-                        end
-                        obj.determinePredictionOrder();
-                    end
-                end
-            end
-        end
     end
     
     methods (Hidden=1, Access = 'private' )
@@ -193,19 +147,22 @@ classdef AutoRegressionBenchmark
                 re=0;
             end
             
-            temp=cellfun(@(x) x.Features,obj.Algorithms,'UniformOutput',false);
-            obj.All_features=unique([temp{:}]);
-            if sum(ismissing(obj.Data(:,unique(obj.All_features))),'all')~=0
-                warning("Some Features have Missing entires:")
-                warning(obj.Algorithms.Features((sum(ismissing(obj.Data(:,obj.Algorithms.Features)))>0)'))
-                re=0;
+            temp=cellfun(@(x) x.Features,obj.Ensamble.Models,'UniformOutput',false);
+            All_features=unique([temp{:}]);
+            if sum(ismissing(obj.Data(:,unique(All_features))),'all')~=0
+                warning("Some Features have Missing entires")
             end
             
-            temp=cellfun(@(x) x.Features,obj.Algorithms,'UniformOutput',false);
-            obj.All_targets=unique([temp{:}]);
-            if sum(ismissing(obj.Data(:,obj.All_targets)),'all')~=0
-                warning("Some Targets have Missing entires:")
-                warning(obj.All_targets((sum(ismissing(obj.Data(:,obj.All_targets)))>0)'))
+            charArr=char(obj.Ensamble.All_targets);
+            for j=1:size(charArr,3)
+                if (isequal(charArr(1,1:5,j),'Next_'))
+                    charArr(1,1:5,j)=' ';
+                    Target_variables(j)=strtrim(string(charArr(1,:,j)));
+                end
+            end
+            
+            if sum(ismissing(obj.Data(:,Target_variables)),'all')~=0
+                warning("Some Targets have Missing entires")
                 re=0;
             end
             
@@ -216,67 +173,17 @@ classdef AutoRegressionBenchmark
             %   Detailed explanation goes here
             
             %get relevant section of the table
-            startIndex = timestep;
-            EndIndex = timestep+obj.BenchmarkSettings.ClosedLoopTimeHorizion-1;
+            startIndex = timestep-(obj.delayedInput+1);
+            EndIndex = timestep+(obj.BenchmarkSettings.ClosedLoopTimeHorizion-1);
             tbl=obj.Data(startIndex:EndIndex,:);
-            ground_truth=tbl(:,obj.All_targets);
+            ground_truth=tbl(obj.delayedInput+2:end,obj.trimNext_(obj.Ensamble.All_targets));
             %fill targets with nans
-            for i=1:numel(obj.All_targets)
-                tbl(:,obj.All_targets(i))=...
+            for i=1:numel(obj.Ensamble.All_targets)
+                tbl(obj.delayedInput+2:end,obj.trimNext_(obj.Ensamble.All_targets(i)))=...
                     array2table(NaN([obj.BenchmarkSettings.ClosedLoopTimeHorizion,1]));
             end
         end
-        
-        function PredictionOrder = determinePredictionOrder(obj)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
-            PredictionOrder=[];
-            
-            %contruct graph
-            
-            if numel(obj.All_targets)<numel(obj.Algorithms)
-                error("Some Target gets predicted by more then one Algorithm")
-            end
-            
-            graph=zeros(length(obj.All_targets));
-            
-            for i=1:length(obj.Algorithms)
-                [dependent,~,indices]=intersect(obj.Algorithms{i}.Features,obj.All_targets);
-                if isempty(dependent)
-                    PredictionOrder(end+1)=i;
-                else
-                    graph(indices,i)=1;
-                end
-            end
-            %iterate over graph
-            if sum(graph,'all') >0
-                if obj.BenchmarkSettings.verbose
-                    fprintf("Some predictions are based on Targets \n")
-                end
-                if sum(diag(graph))>0
-                    error("A Target prediction depends on it self")
-                end
-                while true
-                    resolved=find(sum(graph,1)==0);
-                    if ~isempty(resolved)
-                        graph(resolved,:)=0;
-                        
-                        %Add new resolved to the list
-                        new=setdiff(resolved,PredictionOrder);
-                        if ~isempty(new)
-                            PredictionOrder=[PredictionOrder,new];
-                        elseif sum(diag(graph),'all')==0
-                            %add remaining to the prediction order
-                            PredictionOrder=[PredictionOrder,setdiff(1:length(obj.Algorithms),PredictionOrder)];
-                            break;
-                        else
-                            error("Dependencies cannot be resolved")
-                        end
-                    end
-                end
-            end
-        end
-        
+
         function intervals = findUninterruptedSequences(obj)
             %findUninterruptedSequences Returns an n by 2 Array with n
             %steady time Sequences. The first colum contains the starting
@@ -329,7 +236,7 @@ classdef AutoRegressionBenchmark
             
             sz=size(Error);
             
-            Error=cell2table(mat2cell(Error,sz(1),ones(1,sz(2))),'VariableNames',cellstr(""+obj.All_targets));
+            Error=cell2table(mat2cell(Error,sz(1),ones(1,sz(2))),'VariableNames',cellstr(""+obj.Ensamble.All_targets));
             
             if isempty(UserData)
                 UserData={[]};
@@ -346,6 +253,17 @@ classdef AutoRegressionBenchmark
             LOG.Properties.VariableNames{9} = 'dtw3';
             LOG.Properties.VariableNames{10} = 'UserData';
         end
+        
+        function names=trimNext_(obj,Array)
+            charArr=char(Array);
+            for j=1:size(charArr,3)
+                if (isequal(charArr(1,1:5,j),'Next_'))
+                    charArr(1,1:5,j)=' ';
+                    names(j)=strtrim(string(charArr(1,:,j)));
+                end
+            end
+        end
+        
     end
 end
 
