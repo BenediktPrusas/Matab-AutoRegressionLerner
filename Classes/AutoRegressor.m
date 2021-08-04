@@ -66,7 +66,7 @@ classdef AutoRegressor
             s=superclasses(UserIn);
             if ~isempty(s) && s{1}=="AutoRegressionModel"
                 obj.Models{end+1}=UserIn;
-                obj.All_targets(end+1)=UserIn.Targets;
+                obj.All_targets=[obj.All_targets,UserIn.Targets];
                 %obj.All_features=union(obj.All_features,UserIn.Features);
                 obj.PredictionOrder=obj.determinePredictionOrder;
             else
