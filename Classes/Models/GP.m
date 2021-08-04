@@ -3,8 +3,9 @@ classdef GP < AutoRegressionModel
     %   Detailed explanation goes here
     
     properties
-        GPRmodel
+        GPRmodels
         TrainOptions struct
+        WilkinsonNotations string
     end
     
     methods
@@ -14,11 +15,8 @@ classdef GP < AutoRegressionModel
             
             obj.Features = Features;
             
-            if length(Targets)==1
             obj.Targets = Targets;
-            else
-                error("This implemtation of Gaussian Processes can only have one target")
-            end
+            
             %default for data selection
             if nargin < 4 || isempty(DataSelection)
                 DataSelection=@(tbl)tbl;
@@ -32,15 +30,29 @@ classdef GP < AutoRegressionModel
             
             obj.TrainOptions = TrainOptions;
             obj.UserData=[];
+            
+            %Specifiy Target and Features
+            for j=1:length(obj.Targets)
+                formula=obj.Targets(j)+"~";
+                for i=1:length(obj.Features)
+                    formula=formula+obj.Features(i);
+                    if i < length(obj.Features)
+                        formula=formula+"+";
+                    end
+                end
+                obj.WilkinsonNotations(j)=formula;
+            end
+            
         end
         
         function tbl=predict(obj,tbl)
-
-            if isempty(obj.GPRmodel)
+            
+            if isempty(obj.GPRmodels)
                 error("Model has not been trained before prediction")
             else
-                pred=obj.GPRmodel.predict(tbl);
-                tbl.(obj.Targets)=pred;
+                for i=1:length(obj.GPRmodels)
+                    tbl.(obj.Targets(i))=predict(obj.GPRmodels{i},tbl);       
+                end
             end
             
         end
@@ -49,26 +61,20 @@ classdef GP < AutoRegressionModel
             %Select Trainingdata
             tbl=obj.DataSelection(tbl);
             
-            %Specifiy Target and Features
-            formula=obj.Targets+"~";
-            for i=1:length(obj.Features)
-                formula=formula+obj.Features(i);
-                if i < length(obj.Features)
-                    formula=formula+"+";
+            
+            for i=1:length(obj.Targets)
+                %Prepare Name Value Pairs
+                if isempty(obj.TrainOptions)
+                    obj.GPRmodels{i}= fitrgp(tbl,obj.WilkinsonNotations(i));
+                else
+                    nvPairs = reshape([fieldnames(obj.TrainOptions),...
+                        struct2cell(obj.TrainOptions)]',1,[]);
+                    
+                    %Train Model
+                    obj.GPRmodels{i}= fitrgp(tbl,obj.WilkinsonNotations(i),nvPairs{:});
                 end
             end
-            
-            %Prepare Name Value Pairs
-            if isempty(obj.TrainOptions)
-                obj.GPRmodel= fitrgp(tbl,formula);
-            else
-                nvPairs = reshape([fieldnames(obj.TrainOptions),...
-                    struct2cell(obj.TrainOptions)]',1,[]);
-                
-                %Train Model
-                obj.GPRmodel= fitrgp(tbl,formula,nvPairs{:});
-            end
-            obj.UserData=obj.GPRmodel;
+            %obj.UserData=obj.GPRmodels;
         end
     end
 end
