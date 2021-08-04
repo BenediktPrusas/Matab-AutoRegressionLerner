@@ -11,7 +11,6 @@ classdef GP < AutoRegressionModel
         function obj = GP(Features,Targets,TrainOptions,DataSelection)
             %GP Construct an instance of this class
             %   Detailed explanation goes here
-            %GPR_Algorithm Construct an instance of this class
             
             obj.Features = Features;
             

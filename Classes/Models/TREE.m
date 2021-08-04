@@ -1,5 +1,5 @@
 classdef TREE < AutoRegressionModel
-    %SVM Summary of this class goes here
+    %TREE Summary of this class goes here
     %   Detailed explanation goes here
     
     properties
@@ -9,14 +9,14 @@ classdef TREE < AutoRegressionModel
     
     methods
         function obj = TREE(Features,Targets,TrainOptions,DataSelection)
-            %SVM Construct an instance of this class
+            %TREE Construct an instance of this class
             %   Detailed explanation goes here
             obj.Features = Features;
             
             if length(Targets)==1
             obj.Targets = Targets;
             else
-                error("This implemtation of Gaussian Processes can only have one target")
+                error("This implemtation of a regression Tree can only have one target")
             end
             %default for data selection
             if nargin < 4 || isempty(DataSelection)
@@ -59,7 +59,7 @@ classdef TREE < AutoRegressionModel
             
             %Prepare Name Value Pairs
             if isempty(obj.TrainOptions)
-                obj.TREEmodel= fitrgp(tbl,formula);
+                obj.TREEmodel= fitrtree(tbl,formula);
             else
                 nvPairs = reshape([fieldnames(obj.TrainOptions),...
                     struct2cell(obj.TrainOptions)]',1,[]);

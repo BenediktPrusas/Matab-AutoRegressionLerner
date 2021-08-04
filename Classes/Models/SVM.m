@@ -16,7 +16,7 @@ classdef SVM < AutoRegressionModel
             if length(Targets)==1
             obj.Targets = Targets;
             else
-                error("This implemtation of Gaussian Processes can only have one target")
+                error("This implemtation of SVMs can only have one target")
             end
             %default for data selection
             if nargin < 4 || isempty(DataSelection)
@@ -59,7 +59,7 @@ classdef SVM < AutoRegressionModel
             
             %Prepare Name Value Pairs
             if isempty(obj.TrainOptions)
-                obj.SVMmodel= fitrgp(tbl,formula);
+                obj.SVMmodel= fitrsvm(tbl,formula);
             else
                 nvPairs = reshape([fieldnames(obj.TrainOptions),...
                     struct2cell(obj.TrainOptions)]',1,[]);

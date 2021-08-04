@@ -13,11 +13,6 @@ classdef LR < AutoRegressionModel
             %   Detailed explanation goes here
             obj.Features = Features;
             
-            if length(Targets)==1
-            obj.Targets = Targets;
-            else
-                error("This implemtation of Gaussian Processes can only have one target")
-            end
             %default for data selection
             if nargin < 4 || isempty(DataSelection)
                 DataSelection=@(tbl)tbl;
@@ -59,7 +54,7 @@ classdef LR < AutoRegressionModel
             
             %Prepare Name Value Pairs
             if isempty(obj.TrainOptions)
-                obj.LRmodel= fitrgp(tbl,formula);
+                obj.LRmodel= fitlm(tbl,formula);
             else
                 nvPairs = reshape([fieldnames(obj.TrainOptions),...
                     struct2cell(obj.TrainOptions)]',1,[]);
