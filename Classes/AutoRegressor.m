@@ -41,7 +41,7 @@ classdef AutoRegressor
                     if (isequal(charArr(1,1:5,j),'Next_'))
                         charArr(1,1:5,j)=' ';
                         feature_name=strtrim(string(charArr(1,:,j)));
-                        tbl(row+1,feature_name)=tbl(row,obj.All_targets(j));
+                        tbl.(feature_name)(row+1)=tbl.(obj.All_targets(j))(row);
                     end
                 end 
                 end
