@@ -25,7 +25,7 @@ classdef AutoRegressionBenchmark
             obj.BenchmarkSettings=BenchmarkSettings;
             obj.Data=Data;
             obj.Ensamble=AutoRegressor;
-            obj=obj.verifyDataset(); %Checks for errors in the Dataset
+%            obj=obj.verifyDataset(); %Checks for errors in the Dataset
             
             %for using previous timesteps as input %currently not supportet
             obj.delayedInput=0;
@@ -37,7 +37,7 @@ classdef AutoRegressionBenchmark
             %   input argument for the following prediction
             
             %Verifiy Dataset
-            obj.verifyDataset();
+%            obj.verifyDataset();
             
             % Determine which timesteps to test
             timesteps_to_test=[];
@@ -55,6 +55,7 @@ classdef AutoRegressionBenchmark
                 end
             end
             
+            last_trained=-Inf;
             %for console output
             output_dialog_flag=0;
             %clear previes Results
@@ -69,8 +70,10 @@ classdef AutoRegressionBenchmark
                 [input_tbl, ground_truth]=obj.prepareTableForPrediction(t);
                 
                 % Train all Models
+                if t-last_trained>=obj.BenchmarkSettings.RetrainFrequency
                 obj.Ensamble=obj.Ensamble.train(obj.Data(1:t-1,:));
-                
+                last_trained=t;
+                end
                 %Make Predictions
                 output_tbl=obj.Ensamble.predict(input_tbl);
                 predictions=output_tbl(end-(size(ground_truth,1)-1):end,obj.trimNext_(obj.Ensamble.All_targets));
