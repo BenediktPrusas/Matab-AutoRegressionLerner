@@ -123,20 +123,24 @@ classdef AutoRegressor
                 error("Some Target gets predicted by more then one Algorithm")
             end
             
-            graph=zeros(length(obj.All_targets));
+            graph=zeros(length(obj.Models));
             
             for i=1:length(obj.Models)
-                [dependent,~,indices]=intersect(obj.Models{i}.Features,obj.All_targets);
+               for j=1:length(obj.Models) 
+                dependent=intersect(obj.Models{i}.Features,obj.Models{j}.Targets);
+
+                
                 if isempty(dependent)
-                    PredictionOrder(end+1)=i;
+                    graph(i,j)=0;
                 else
-                    graph(indices,i)=1;
+                    graph(i,j)=1;
                 end
+               end
             end
             %iterate over graph
             if sum(graph,'all') >0
                 if sum(diag(graph))>0
-                    error("A Target prediction depends on it self")
+                    error("A Model prediction depends on it self")
                 end
                 while true
                     resolved=find(sum(graph,1)==0);
