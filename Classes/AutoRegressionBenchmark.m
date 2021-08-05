@@ -231,7 +231,7 @@ classdef AutoRegressionBenchmark
             GroundTruth=table2array(GroundTruth);
             Predictions=table2array(Predictions);
             Error=(GroundTruth-Predictions);
-            ErrorRelative=Error./max(GroundTruth,Error);
+            ErrorRelative=Error./max(GroundTruth,abs(Error));
             ErrorDynamic=Error./(max(GroundTruth,[],1)-min(GroundTruth,[],1));
             RMSE=sqrt(mean(Error.^2,1));
             MAPE=100/obj.BenchmarkSettings.ClosedLoopTimeHorizion * sum(abs(Error)./GroundTruth,1);
