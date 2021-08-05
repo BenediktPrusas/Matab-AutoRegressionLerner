@@ -13,7 +13,7 @@ classdef AutoRegressionBenchmark
         Ensamble AutoRegressor
     end
     
-     properties (SetAccess='private')
+    properties (SetAccess='private')
         delayedInput double%for using previous timesteps as input %currently not supportet
     end
     
@@ -25,7 +25,7 @@ classdef AutoRegressionBenchmark
             obj.BenchmarkSettings=BenchmarkSettings;
             obj.Data=Data;
             obj.Ensamble=AutoRegressor;
-%            obj=obj.verifyDataset(); %Checks for errors in the Dataset
+            %            obj=obj.verifyDataset(); %Checks for errors in the Dataset
             
             %for using previous timesteps as input %currently not supportet
             obj.delayedInput=0;
@@ -37,7 +37,7 @@ classdef AutoRegressionBenchmark
             %   input argument for the following prediction
             
             %Verifiy Dataset
-%            obj.verifyDataset();
+            %            obj.verifyDataset();
             
             % Determine which timesteps to test
             timesteps_to_test=[];
@@ -71,8 +71,8 @@ classdef AutoRegressionBenchmark
                 
                 % Train all Models
                 if t-last_trained>=obj.BenchmarkSettings.RetrainFrequency
-                obj.Ensamble=obj.Ensamble.train(obj.Data(1:t-1,:));
-                last_trained=t;
+                    obj.Ensamble=obj.Ensamble.train(obj.Data(1:t-1,:));
+                    last_trained=t;
                 end
                 %Make Predictions
                 output_tbl=obj.Ensamble.predict(input_tbl);
@@ -132,6 +132,49 @@ classdef AutoRegressionBenchmark
                 
             end
         end
+        function animate(obj,filename)
+            %dispResults Some plots and statistics from the last benchmark
+            if isempty(obj.ErrorLog)
+                warning("No Results to display")
+            else
+                N=numel(obj.Ensamble.All_targets);
+                w=round(sqrt(4/3 *N));
+                h=ceil(N/w);
+                temp=cell2mat(obj.ErrorLog.GroundTruth);
+                yscales(:,1)=min(temp,[],1)';
+                yscales(:,2)=max(temp,[],1)';
+                names= cellfun(@obj.trimNext_ ,obj.ErrorLog.Error.Properties.VariableNames);
+                fig = figure('Position',[0 0 1920 1080]);
+                axis tight manual % this ensures that getframe() returns a consistent size
+                for timestep = 1:height(obj.ErrorLog)
+                        
+                    for target=1:N
+                        subplot(h,w,target)
+                        plot(obj.ErrorLog.Predictions{timestep}(:,target),'r-o')
+                        hold on
+                        plot(obj.ErrorLog.GroundTruth{timestep}(:,target),'b-s')
+                        hold off
+                        title(names(target))
+                        legend("Prediction","GroundTruth")
+                        ylim(yscales(target,:))
+                    end
+                    
+                    drawnow
+                    % Capture the plot as an image
+                    frame = getframe(fig);
+                    im = frame2im(frame);
+                    [imind,cm] = rgb2ind(im,256);
+                    % Write to the GIF File
+                    if timestep == 1
+                        imwrite(imind,cm,filename,'gif', 'Loopcount',inf,'DelayTime',1/24);
+                    else
+                        imwrite(imind,cm,filename,'gif','WriteMode','append');
+                    end
+                end
+                
+            end
+        end
+        
     end
     
     methods (Hidden=1, Access = 'private' )
@@ -186,7 +229,7 @@ classdef AutoRegressionBenchmark
                     array2table(NaN([obj.BenchmarkSettings.ClosedLoopTimeHorizion,1]));
             end
         end
-
+        
         function intervals = findUninterruptedSequences(obj)
             %findUninterruptedSequences Returns an n by 2 Array with n
             %steady time Sequences. The first colum contains the starting
