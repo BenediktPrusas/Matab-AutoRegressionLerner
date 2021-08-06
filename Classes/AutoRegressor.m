@@ -1,6 +1,6 @@
 classdef AutoRegressor
-    %UNTITLED Summary of this class goes here
-    %   Detailed explanation goes here
+    %AutoRegressor Union of ML-models for auto-regressive(closed-loop)
+    %predictions
     
     properties (SetAccess='private')
         Models
@@ -12,17 +12,20 @@ classdef AutoRegressor
     
     
     methods
-        function obj = AutoRegressor(varargin)
+        function obj = AutoRegressor(Models)
             %AutoRegressor Construct an instance of this class
-            %   Detailed explanation goes here
+            %   Models can be a single model object or a cell array of model
+            %   objects. Each model object must have 'AutoRegressionModel'
+            %   as superclass
             if nargin>0
-                obj.addModel(varargin{1});
+                obj.addModel(Models);
             end
         end
         
         function tbl = predict(obj,tbl)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
+            %predict Makes closed loop predictions for the target variables
+            %of the autoregressor Models. Values to be predicted have to be
+            %NaN. All others variables will be assumed as exogenous
             
             tbl=obj.feature2target(tbl); 
             %iterate over rows with missing target values
@@ -52,8 +55,10 @@ classdef AutoRegressor
         end
         
         function obj = addModel(obj,UserIn)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
+            %addModel Adds Models to the AutoRegressor
+            %   Models can be a single model object or a cell array of model
+            %   objects. Each model object must have 'AutoRegressionModel'
+            %   as superclass
             
             %check for cell array
             %check superclass
@@ -61,8 +66,6 @@ classdef AutoRegressor
             %Update Features and Targets
             %update prediction order
             
-            %addAlgorithm Adds an Algoritm or cell Array of Algorithms to
-            %the benchmark object
             s=superclasses(UserIn);
             if ~isempty(s) && s{1}=="AutoRegressionModel"
                 obj.Models{end+1}=UserIn;
@@ -90,8 +93,7 @@ classdef AutoRegressor
         end
         
         function obj = train(obj,tbl)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
+            %train train/retrains all the Models
             tbl=obj.feature2target(tbl);
             for i=1:numel(obj.Models)
                 obj.Models{i}=obj.Models{i}.train(tbl);
@@ -100,21 +102,34 @@ classdef AutoRegressor
         end
         
         function info(obj)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
+            %info Information on the used variables and model dependencies
             
             % print variables
+            fprintf("All predicted variabels are:\n"+strjoin(obj.All_targets)+"\n")
+            
+            temp=cellfun(@(x)x.Features,obj.Models,'UniformOutput',false);
+            All_features=unique(cat(2,temp{:}));
+            fprintf("All used variabels are:\n"+strjoin(All_features)+"\n")
             % types and numbers of models
+            
             % dependencys
+            [~,dependencies]=obj.determinePredictionOrder();
+            for i=1:size(dependencies,2)
+                if sum(dependencies(:,i))==0
+                disp("Model "+i +" is not dependent from other Models" )    
+                else
+                disp("Model "+i+" depends on Model(s): "+num2str(find(dependencies(:,1)==1)'))
+                end
+            end
             
         end
         
     end
     methods (Hidden=true, Access = 'private')
         
-        function PredictionOrder = determinePredictionOrder(obj)
-            %METHOD1 Summary of this method goes here
-            %   Detailed explanation goes here
+        function [PredictionOrder, Dependencies ] = determinePredictionOrder(obj)
+            %PredictionOrder Determines the dependencies between the models
+            %and returns an array of the indices of the models in the order the predictons need to tanke place  
             PredictionOrder=[];
             
             %contruct graph
@@ -137,6 +152,11 @@ classdef AutoRegressor
                 end
                end
             end
+            
+            if nargout >1
+                Dependencies=graph;
+            end
+            
             %iterate over graph
             if sum(graph,'all') >0
                 if sum(diag(graph))>0
@@ -164,6 +184,7 @@ classdef AutoRegressor
         end
         
         function tbl = feature2target(obj,tbl)
+            % time shifting the targts and adding the 'Next_' prefix
             charArr=char(obj.All_targets);
             for j=1:size(charArr,3)
                 if (isequal(charArr(1,1:5,j),'Next_'))
